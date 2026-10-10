@@ -2,3 +2,5 @@
 /vendor
 /vendor.tar
 /.cargo
+/result
+/.direnv

@@ -42,6 +42,8 @@ To remove: `sudo just uninstall`.
 
 ## Development
 
+With Nix, `nix develop` gives a shell with Rust, `just` and the build libraries.
+
 ```sh
 just check           # clippy + tests
 just list-updates    # print what the applet sees (add --refresh to refresh metadata)
