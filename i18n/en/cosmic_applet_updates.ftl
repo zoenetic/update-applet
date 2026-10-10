@@ -33,6 +33,7 @@ restart-now = Restart now…
 error = Something went wrong: { $details }
 include-flatpak = Include Flatpak apps
 show-count = Show count on panel
+hide-when-up-to-date = Hide when up to date
 check-interval = Check automatically
 check-every = { $hours ->
     [0] Never

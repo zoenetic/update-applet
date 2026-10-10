@@ -15,6 +15,8 @@ pub struct UpdatesAppletConfig {
     pub include_flatpak: bool,
     /// Show the number of updates next to the panel icon.
     pub show_count: bool,
+    /// Take no space on the panel while there is nothing to install.
+    pub hide_when_up_to_date: bool,
 }
 
 impl Default for UpdatesAppletConfig {
@@ -23,6 +25,7 @@ impl Default for UpdatesAppletConfig {
             check_interval_hours: 6,
             include_flatpak: true,
             show_count: true,
+            hide_when_up_to_date: true,
         }
     }
 }

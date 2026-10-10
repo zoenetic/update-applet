@@ -6,7 +6,8 @@ A COSMIC panel applet that shows available updates and installs them.
   (dnf on Fedora; PackageKit also covers apt, zypper and others).
 - Flatpak apps and runtimes through the `flatpak` command.
 - Panel icon changes when updates are waiting, and turns urgent for security updates.
-  The update count can be shown next to it.
+  The update count can be shown next to it. By default it hides itself when
+  there is nothing to install (turn off *Hide when up to date* to keep it visible).
 - The popup lists updates per source and can:
   - install everything now,
   - download system updates and install them on the next restart (Fedora's

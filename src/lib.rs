@@ -86,6 +86,7 @@ enum Message {
     ToggleSection(Source),
     SetIncludeFlatpak(bool),
     SetShowCount(bool),
+    SetHideWhenUpToDate(bool),
     CycleCheckInterval,
 }
 
@@ -271,6 +272,9 @@ impl cosmic::Application for UpdatesApplet {
             Message::SetShowCount(value) => {
                 self.write_config(|config, helper| config.set_show_count(helper, value));
             }
+            Message::SetHideWhenUpToDate(value) => {
+                self.write_config(|config, helper| config.set_hide_when_up_to_date(helper, value));
+            }
             Message::CycleCheckInterval => {
                 let hours = self.config.next_check_interval();
                 self.write_config(|config, helper| config.set_check_interval_hours(helper, hours));
@@ -280,6 +284,10 @@ impl cosmic::Application for UpdatesApplet {
     }
 
     fn view(&self) -> Element<'_, Message> {
+        if self.hidden() {
+            return self.core.applet.autosize_window(row![]).into();
+        }
+
         let count = self.updates.count();
         let icon_name = if count == 0 {
             "io.github.zoenetic.CosmicAppletUpdates-symbolic"
@@ -307,13 +315,13 @@ impl cosmic::Application for UpdatesApplet {
 
         self.core
             .applet
-            .applet_tooltip(
+            .autosize_window(self.core.applet.applet_tooltip(
                 button,
                 tooltip,
                 self.popup.is_some(),
                 Message::Surface,
                 None,
-            )
+            ))
             .into()
     }
 
@@ -399,6 +407,12 @@ impl cosmic::Application for UpdatesApplet {
                     .width(Length::Fill),
             ))
             .push(padded_control(
+                toggler(self.config.hide_when_up_to_date)
+                    .label(fl!("hide-when-up-to-date"))
+                    .on_toggle(Message::SetHideWhenUpToDate)
+                    .width(Length::Fill),
+            ))
+            .push(padded_control(
                 toggler(self.config.show_count)
                     .label(fl!("show-count"))
                     .on_toggle(Message::SetShowCount)
@@ -448,6 +462,17 @@ impl cosmic::Application for UpdatesApplet {
 }
 
 impl UpdatesApplet {
+    /// Nothing to install and nothing to report, so take no panel space.
+    fn hidden(&self) -> bool {
+        self.config.hide_when_up_to_date
+            && self.popup.is_none()
+            && self.updates.count() == 0
+            && !self.updates.offline_prepared
+            && self.updates.errors.is_empty()
+            && self.install_error.is_none()
+            && !matches!(self.phase, Phase::Installing { .. })
+    }
+
     /// Panel button showing the update count next to the icon.
     fn icon_with_count<'a>(&self, icon_name: &'a str, count: usize) -> Element<'a, Message> {
         let is_horizontal = matches!(
