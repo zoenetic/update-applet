@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Updates
+Comment=Show and install available system and Flatpak updates
+Type=Application
+Exec=cosmic-applet-updates
+Terminal=false
+Categories=COSMIC;
+Keywords=COSMIC;Applet;Updates;Upgrade;Packages;Flatpak;Software;
+Icon=io.github.zoenetic.CosmicAppletUpdates-symbolic
+StartupNotify=true
+NoDisplay=true
+X-CosmicApplet=true
+X-CosmicHoverPopup=Auto
+X-OverflowPriority=10

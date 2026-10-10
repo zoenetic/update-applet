@@ -1,0 +1,41 @@
+[package]
+name = "cosmic-applet-updates"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-only"
+description = "COSMIC panel applet that shows and installs available system and Flatpak updates"
+repository = "https://github.com/zoenetic/update-applet"
+rust-version = "1.90"
+
+[dependencies]
+futures = "0.3"
+i18n-embed = { version = "0.16.0", features = [
+    "fluent-system",
+    "desktop-requester",
+] }
+i18n-embed-fl = "0.10"
+libcosmic = { git = "https://github.com/pop-os/libcosmic", rev = "5a8bd9482a35ae94c1e54edf77b331c6b970f170", default-features = false, features = [
+    "applet",
+    "applet-token",
+    "dbus-config",
+    "multi-window",
+    "tokio",
+    "wayland",
+    "desktop-systemd-scope",
+    "winit",
+] }
+rust-embed = "8.11.0"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.49.0", features = ["full"] }
+tracing = "0.1"
+tracing-log = "0.2.0"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+zbus = { version = "5.14.0", default-features = false, features = ["tokio"] }
+
+[profile.release]
+opt-level = 3
+panic = "abort"
+lto = "thin"
+
+[patch."https://github.com/smithay/client-toolkit.git"]
+sctk = { package = "smithay-client-toolkit", version = "0.20.0" }
