@@ -6,7 +6,7 @@ A COSMIC panel applet that shows available updates and installs them.
   (dnf on Fedora; PackageKit also covers apt, zypper and others).
 - Flatpak apps and runtimes through the `flatpak` command.
 - Panel icon changes when updates are waiting, and turns urgent for security updates.
-  The update count can be shown next to it. By default it hides itself when
+  The update count can be shown as a badge on it. By default it hides itself when
   there is nothing to install (turn off *Hide when up to date* to keep it visible).
 - The popup lists updates per source and can:
   - install everything now,
@@ -14,7 +14,9 @@ A COSMIC panel applet that shows available updates and installs them.
     recommended "offline update"), then restart via the COSMIC dialog,
   - check now, or open COSMIC Store.
 - Checks automatically every 1, 6 (default), 12 or 24 hours, or never.
-  Settings are in the popup and stored with cosmic-config.
+- Settings live in a separate **Updates Settings** window, so they are reachable
+  even while the applet is hidden: open it from the app launcher, the applet's
+  **Settings…** item, or `cosmic-applet-updates --settings`.
 
 Installs ask for your password through polkit, like COSMIC Store does.
 
@@ -49,13 +51,15 @@ With Nix, `nix develop` gives a shell with Rust, `just` and the build libraries.
 just check           # clippy + tests
 just list-updates    # print what the applet sees (add --refresh to refresh metadata)
 just run             # run outside the panel
+just settings        # open the settings window
 ```
 
 Code layout:
 
 - `src/lib.rs` – the applet (panel button, popup, state)
 - `src/backend/` – update sources; `packagekit.rs` and `flatpak.rs`
-- `src/config.rs` – settings
+- `src/settings.rs` – the settings window
+- `src/config.rs` – stored settings
 - `i18n/` – translations (Fluent)
 
 ### Adding another distro

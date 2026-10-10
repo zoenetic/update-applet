@@ -37,6 +37,10 @@ check *args:
 list-updates *args:
     cargo run --example check -- {{ args }}
 
+# Opens the settings window
+settings *args:
+    cargo run {{ args }} -- --settings
+
 # Runs the applet outside the panel, for development
 run *args:
     env RUST_LOG=cosmic_applet_updates=debug RUST_BACKTRACE=full cargo run {{ args }}
@@ -45,12 +49,14 @@ run *args:
 install:
     install -Dm0755 {{ targetdir }}/{{ target }}/{{ name }} {{ bindir }}/{{ name }}
     install -Dm0644 data/{{ appid }}.desktop {{ sharedir }}/applications/{{ appid }}.desktop
+    install -Dm0644 data/{{ appid }}.Settings.desktop {{ sharedir }}/applications/{{ appid }}.Settings.desktop
     find data/icons -type f -printf '%P\n' | xargs -I {} install -Dm0644 data/icons/{} {{ iconsdir }}/{}
 
 # Removes installed files
 uninstall:
     rm -f {{ bindir }}/{{ name }}
     rm -f {{ sharedir }}/applications/{{ appid }}.desktop
+    rm -f {{ sharedir }}/applications/{{ appid }}.Settings.desktop
     find data/icons -type f -printf '%P\n' | xargs -I {} rm -f {{ iconsdir }}/{}
 
 # Vendor Cargo dependencies locally

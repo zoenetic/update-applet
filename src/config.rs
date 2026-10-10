@@ -36,13 +36,23 @@ impl UpdatesAppletConfig {
             .map(|helper| Self::get_entry(&helper).unwrap_or_else(|(_errors, config)| config))
             .unwrap_or_default()
     }
+}
 
-    /// The interval that follows the current one in [`CHECK_INTERVALS`].
-    pub fn next_check_interval(&self) -> u32 {
-        let current = CHECK_INTERVALS
-            .iter()
-            .position(|&h| h == self.check_interval_hours)
-            .unwrap_or(0);
-        CHECK_INTERVALS[(current + 1) % CHECK_INTERVALS.len()]
+/// Opens the config for writing and applies `set`, logging any failure.
+pub fn save(
+    config: &mut UpdatesAppletConfig,
+    id: &str,
+    set: impl FnOnce(
+        &mut UpdatesAppletConfig,
+        &cosmic_config::Config,
+    ) -> Result<bool, cosmic_config::Error>,
+) {
+    match cosmic_config::Config::new(id, UpdatesAppletConfig::VERSION) {
+        Ok(helper) => {
+            if let Err(why) = set(config, &helper) {
+                tracing::error!(?why, "failed to save config");
+            }
+        }
+        Err(why) => tracing::error!(?why, "failed to open config"),
     }
 }

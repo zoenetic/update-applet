@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Updates Settings
+Comment=Configure the Updates panel applet
+Type=Application
+Exec=cosmic-applet-updates --settings
+Terminal=false
+Categories=COSMIC;Settings;
+Keywords=COSMIC;Applet;Updates;Settings;Preferences;
+Icon=io.github.zoenetic.CosmicAppletUpdates-symbolic
+StartupNotify=true
+StartupWMClass=io.github.zoenetic.CosmicAppletUpdates.Settings

@@ -41,3 +41,8 @@ check-every = { $hours ->
    *[other] Every { $hours } hours
 }
 open-store = Open COSMIC Store…
+settings = Settings…
+settings-title = Updates Settings
+section-panel = Panel
+section-checking = Checking
+hide-when-up-to-date-description = Take no space on the panel while there is nothing to install

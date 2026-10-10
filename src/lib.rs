@@ -4,33 +4,35 @@
 pub mod backend;
 mod config;
 mod localize;
+mod settings;
+
+pub use settings::run as run_settings;
 
 use std::time::{Duration, SystemTime};
 
 use cosmic::{
     Element, Task, app,
     applet::{
-        Size,
-        cosmic_panel_config::{PanelAnchor, PanelSize},
         menu_button, padded_control,
         token::subscription::{TokenRequest, TokenUpdate, activation_token_subscription},
     },
     cctk::sctk::reexports::calloop,
-    cosmic_config::CosmicConfigEntry,
     cosmic_theme::Spacing,
     iced::{
-        self, Alignment, Length, Subscription,
-        widget::{Column, column, container, row},
+        self, Alignment, Background, Border, Color, Length, Shadow, Subscription,
+        widget::{Column, column, container, row, stack},
         window,
     },
     surface, theme,
-    widget::{button, divider, icon, indeterminate_linear, scrollable, text, toggler},
+    widget::{divider, icon, indeterminate_linear, scrollable, text},
 };
 
 use backend::{InstallEvent, InstallJob, Kind, Source, Stage, Update, Updates};
 use config::UpdatesAppletConfig;
 
 const APP_ID: &str = "io.github.zoenetic.CosmicAppletUpdates";
+/// Token request marker for opening our own settings window.
+const SETTINGS_EXEC: &str = "--settings";
 /// Lists longer than this are put in a scrollable area.
 const MAX_VISIBLE_ROWS: usize = 8;
 
@@ -83,12 +85,9 @@ enum Message {
     },
     Installing(InstallEvent),
     Restart,
+    OpenSettings,
     OpenStore,
     ToggleSection(Source),
-    SetIncludeFlatpak(bool),
-    SetShowCount(bool),
-    SetHideWhenUpToDate(bool),
-    CycleCheckInterval,
 }
 
 impl cosmic::Application for UpdatesApplet {
@@ -170,7 +169,11 @@ impl cosmic::Application for UpdatesApplet {
                     self.token_tx = None;
                 }
                 TokenUpdate::ActivationToken { token, exec } => {
-                    let mut cmd = std::process::Command::new(exec);
+                    let mut cmd = if exec == SETTINGS_EXEC {
+                        settings::command()
+                    } else {
+                        std::process::Command::new(exec)
+                    };
                     if let Some(token) = token {
                         cmd.env("XDG_ACTIVATION_TOKEN", &token);
                         cmd.env("DESKTOP_STARTUP_ID", &token);
@@ -255,31 +258,10 @@ impl cosmic::Application for UpdatesApplet {
                     tracing::error!("failed to spawn cosmic-osd: {why}");
                 }
             }
-            Message::OpenStore => {
-                if let Some(tx) = self.token_tx.as_ref() {
-                    let _ = tx.send(TokenRequest {
-                        app_id: Self::APP_ID.to_string(),
-                        exec: "cosmic-store".to_string(),
-                    });
-                } else {
-                    tracing::error!("Wayland tx is None");
-                }
-            }
+            Message::OpenSettings => self.launch(SETTINGS_EXEC),
+            Message::OpenStore => self.launch("cosmic-store"),
             Message::ToggleSection(Source::System) => self.show_system = !self.show_system,
             Message::ToggleSection(Source::Flatpak) => self.show_flatpak = !self.show_flatpak,
-            Message::SetIncludeFlatpak(value) => {
-                self.write_config(|config, helper| config.set_include_flatpak(helper, value));
-            }
-            Message::SetShowCount(value) => {
-                self.write_config(|config, helper| config.set_show_count(helper, value));
-            }
-            Message::SetHideWhenUpToDate(value) => {
-                self.write_config(|config, helper| config.set_hide_when_up_to_date(helper, value));
-            }
-            Message::CycleCheckInterval => {
-                let hours = self.config.next_check_interval();
-                self.write_config(|config, helper| config.set_check_interval_hours(helper, hours));
-            }
         }
         Task::none()
     }
@@ -413,38 +395,9 @@ impl cosmic::Application for UpdatesApplet {
                 .on_press_maybe((!busy).then_some(Message::Check(true))),
         );
 
-        // Settings
         content = content
             .push(separator())
-            .push(padded_control(
-                toggler(self.config.include_flatpak)
-                    .label(fl!("include-flatpak"))
-                    .on_toggle(Message::SetIncludeFlatpak)
-                    .width(Length::Fill),
-            ))
-            .push(padded_control(
-                toggler(self.config.hide_when_up_to_date)
-                    .label(fl!("hide-when-up-to-date"))
-                    .on_toggle(Message::SetHideWhenUpToDate)
-                    .width(Length::Fill),
-            ))
-            .push(padded_control(
-                toggler(self.config.show_count)
-                    .label(fl!("show-count"))
-                    .on_toggle(Message::SetShowCount)
-                    .width(Length::Fill),
-            ))
-            .push(
-                menu_button(
-                    row![
-                        text::body(fl!("check-interval")).width(Length::Fill),
-                        text::body(fl!("check-every", hours = self.config.check_interval_hours)),
-                    ]
-                    .align_y(Alignment::Center),
-                )
-                .on_press(Message::CycleCheckInterval),
-            )
-            .push(separator())
+            .push(menu_button(text::body(fl!("settings"))).on_press(Message::OpenSettings))
             .push(menu_button(text::body(fl!("open-store"))).on_press(Message::OpenStore));
 
         self.core.applet.popup_container(content).into()
@@ -478,6 +431,18 @@ impl cosmic::Application for UpdatesApplet {
 }
 
 impl UpdatesApplet {
+    /// Starts `exec` with an activation token so its window gets focus.
+    fn launch(&self, exec: &str) {
+        if let Some(tx) = self.token_tx.as_ref() {
+            let _ = tx.send(TokenRequest {
+                app_id: APP_ID.to_string(),
+                exec: exec.to_string(),
+            });
+        } else {
+            tracing::error!("Wayland tx is None");
+        }
+    }
+
     /// Nothing to install and nothing to report, so take no panel space.
     fn hidden(&self) -> bool {
         self.config.hide_when_up_to_date
@@ -489,51 +454,48 @@ impl UpdatesApplet {
             && !matches!(self.phase, Phase::Installing { .. })
     }
 
-    /// Panel button showing the update count next to the icon.
+    /// Panel icon with the update count as a badge in its corner.
+    ///
+    /// The badge sits on top of the icon so the applet keeps the standard
+    /// icon size and can never be clipped by the panel.
     fn icon_with_count<'a>(&self, icon_name: &'a str, count: usize) -> Element<'a, Message> {
-        let is_horizontal = matches!(
-            self.core.applet.anchor,
-            PanelAnchor::Top | PanelAnchor::Bottom
-        );
-        let suggested_size = self.core.applet.suggested_size(true);
-        let applet_padding = self.core.applet.suggested_padding(true);
-
-        let children: [Element<'_, Message>; 2] = [
-            icon::from_name(icon_name)
-                .symbolic(true)
-                .size(suggested_size.0)
-                .into(),
-            count_text(&self.core.applet, count.to_string(), is_horizontal)
-                .font(cosmic::font::default())
-                .height(Length::Fixed(suggested_size.1 as f32))
-                .align_x(Alignment::Center)
-                .align_y(Alignment::Center)
-                .into(),
-        ];
-
-        let content: Element<'_, Message> = if is_horizontal {
-            row(children)
-                .spacing(applet_padding.1)
-                .align_y(Alignment::Center)
-                .into()
+        let label = if count > 99 {
+            "99+".to_string()
         } else {
-            column(children)
-                .spacing(applet_padding.1)
-                .align_x(Alignment::Center)
-                .into()
+            count.to_string()
         };
 
-        let (horizontal_padding, vertical_padding) = if is_horizontal {
-            (applet_padding.0, applet_padding.1)
-        } else {
-            (applet_padding.1, applet_padding.0)
-        };
+        let badge = container(text(label).size(9).font(cosmic::font::bold()))
+            .padding([0, 3])
+            .class(cosmic::style::Container::Custom(Box::new(|theme| {
+                let cosmic = theme.cosmic();
+                container::Style {
+                    text_color: Some(cosmic.accent.on.into()),
+                    background: Some(Background::Color(cosmic.accent_color().into())),
+                    border: Border {
+                        radius: 6.0.into(),
+                        width: 0.0,
+                        color: Color::TRANSPARENT,
+                    },
+                    shadow: Shadow::default(),
+                    icon_color: None,
+                    snap: true,
+                }
+            })));
 
-        button::custom(content)
-            .on_press_down(Message::TogglePopup)
-            .class(theme::Button::AppletIcon)
-            .padding([vertical_padding, horizontal_padding])
-            .into()
+        stack![
+            self.core
+                .applet
+                .icon_button(icon_name)
+                .on_press_down(Message::TogglePopup),
+            container(badge)
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .align_x(Alignment::End)
+                .align_y(Alignment::Start)
+                .padding(1),
+        ]
+        .into()
     }
 
     fn check(&mut self, refresh: bool) -> app::Task<Message> {
@@ -546,23 +508,6 @@ impl UpdatesApplet {
         Task::perform(backend::check(refresh, include_flatpak), |updates| {
             cosmic::action::app(Message::Checked(updates))
         })
-    }
-
-    fn write_config(
-        &mut self,
-        set: impl FnOnce(
-            &mut UpdatesAppletConfig,
-            &cosmic::cosmic_config::Config,
-        ) -> Result<bool, cosmic::cosmic_config::Error>,
-    ) {
-        match cosmic::cosmic_config::Config::new(APP_ID, UpdatesAppletConfig::VERSION) {
-            Ok(helper) => {
-                if let Err(why) = set(&mut self.config, &helper) {
-                    tracing::error!(?why, "failed to save config");
-                }
-            }
-            Err(why) => tracing::error!(?why, "failed to open config"),
-        }
     }
 
     /// Header of the popup: what the applet is doing or what it found.
@@ -681,27 +626,6 @@ fn update_row(update: &Update) -> Element<'_, Message> {
     }
 
     padded_control(line).into()
-}
-
-/// Count label sized for the panel, as the battery applet does for its percentage.
-fn count_text(
-    applet: &cosmic::applet::Context,
-    label: String,
-    is_horizontal: bool,
-) -> cosmic::widget::Text<'static, cosmic::Theme> {
-    if is_horizontal {
-        return applet.text(label);
-    }
-    let width = Length::Fixed(f32::from(applet.suggested_size(true).0));
-    match &applet.size {
-        Size::Hardcoded(_) => text::text(label),
-        Size::PanelSize(PanelSize::XS) => text::caption(label),
-        Size::PanelSize(PanelSize::S) => text::body(label),
-        Size::PanelSize(PanelSize::M) => text::title4(label),
-        Size::PanelSize(PanelSize::L) => text::title3(label),
-        _ => text::title2(label),
-    }
-    .width(width)
 }
 
 fn last_checked(at: SystemTime) -> String {
