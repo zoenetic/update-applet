@@ -10,7 +10,8 @@ use std::time::{Duration, SystemTime};
 use cosmic::{
     Element, Task, app,
     applet::{
-        cosmic_panel_config::PanelAnchor,
+        Size,
+        cosmic_panel_config::{PanelAnchor, PanelSize},
         menu_button, padded_control,
         token::subscription::{TokenRequest, TokenUpdate, activation_token_subscription},
     },
@@ -313,16 +314,31 @@ impl cosmic::Application for UpdatesApplet {
             self.icon_with_count(icon_name, count)
         };
 
-        self.core
+        let content: Element<'_, Message> = self
+            .core
             .applet
-            .autosize_window(self.core.applet.applet_tooltip(
+            .applet_tooltip(
                 button,
                 tooltip,
                 self.popup.is_some(),
                 Message::Surface,
                 None,
-            ))
-            .into()
+            )
+            .into();
+
+        // In the overflow popup the panel sets both bounds, and autosizing
+        // would fight it.
+        let in_overflow = self
+            .core
+            .applet
+            .suggested_bounds
+            .as_ref()
+            .is_some_and(|c| c.width > 0. && c.height > 0.);
+        if in_overflow {
+            content
+        } else {
+            self.core.applet.autosize_window(content).into()
+        }
     }
 
     fn view_window(&self, id: window::Id) -> Element<'_, Message> {
@@ -487,10 +503,9 @@ impl UpdatesApplet {
                 .symbolic(true)
                 .size(suggested_size.0)
                 .into(),
-            self.core
-                .applet
-                .text(count.to_string())
+            count_text(&self.core.applet, count.to_string(), is_horizontal)
                 .font(cosmic::font::default())
+                .height(Length::Fixed(suggested_size.1 as f32))
                 .align_x(Alignment::Center)
                 .align_y(Alignment::Center)
                 .into(),
@@ -666,6 +681,27 @@ fn update_row(update: &Update) -> Element<'_, Message> {
     }
 
     padded_control(line).into()
+}
+
+/// Count label sized for the panel, as the battery applet does for its percentage.
+fn count_text(
+    applet: &cosmic::applet::Context,
+    label: String,
+    is_horizontal: bool,
+) -> cosmic::widget::Text<'static, cosmic::Theme> {
+    if is_horizontal {
+        return applet.text(label);
+    }
+    let width = Length::Fixed(f32::from(applet.suggested_size(true).0));
+    match &applet.size {
+        Size::Hardcoded(_) => text::text(label),
+        Size::PanelSize(PanelSize::XS) => text::caption(label),
+        Size::PanelSize(PanelSize::S) => text::body(label),
+        Size::PanelSize(PanelSize::M) => text::title4(label),
+        Size::PanelSize(PanelSize::L) => text::title3(label),
+        _ => text::title2(label),
+    }
+    .width(width)
 }
 
 fn last_checked(at: SystemTime) -> String {
