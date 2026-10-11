@@ -46,7 +46,7 @@ run *args:
     env RUST_LOG=cosmic_applet_updates=debug RUST_BACKTRACE=full cargo run {{ args }}
 
 # Installs files into the system
-install:
+install: check-installable
     install -Dm0755 {{ targetdir }}/{{ target }}/{{ name }} {{ bindir }}/{{ name }}
     install -Dm0644 data/{{ appid }}.desktop {{ sharedir }}/applications/{{ appid }}.desktop
     install -Dm0644 data/{{ appid }}.Settings.desktop {{ sharedir }}/applications/{{ appid }}.Settings.desktop
@@ -66,6 +66,23 @@ vendor:
     echo 'directory = "vendor"' >> .cargo/config.toml
     tar pcf vendor.tar vendor
     rm -rf vendor
+
+# Refuses a missing binary, or one built in a Nix shell (it loads libraries
+# from the Nix store, so the panel can't start it)
+[private]
+check-installable:
+    #!/usr/bin/env sh
+    set -eu
+    bin='{{ targetdir }}/{{ target }}/{{ name }}'
+    if [ ! -x "$bin" ]; then
+        echo "error: $bin not found, run 'just' first" >&2
+        exit 1
+    fi
+    if readelf -l "$bin" 2>/dev/null | grep -q 'interpreter: /nix/store/'; then
+        echo "error: $bin was built in a Nix shell and only runs there." >&2
+        echo "Rebuild it outside Nix with 'just', then install again." >&2
+        exit 1
+    fi
 
 # Extracts vendored dependencies
 [private]

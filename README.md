@@ -43,9 +43,16 @@ Then add **Updates** to a panel in *Settings → Desktop → Panel → Configure
 
 To remove: `sudo just uninstall`.
 
-## Development
+### From a release
 
-With Nix, `nix develop` gives a shell with Rust, `just` and the build libraries.
+Each [release](https://github.com/zoenetic/update-applet/releases) has a prebuilt
+x86_64 tarball. Unpack it, then from inside the folder:
+
+```sh
+sudo just install
+```
+
+## Development
 
 ```sh
 just check           # clippy + tests
