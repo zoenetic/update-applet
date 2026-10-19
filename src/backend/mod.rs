@@ -4,12 +4,15 @@
 //! Update sources. Each source lists and installs its own updates; the applet
 //! only sees the combined result.
 //!
-//! To support another distribution whose package manager PackageKit does not
-//! cover (rpm-ostree on Fedora Atomic, for example), add a module here, a
-//! [`Source`] variant, and hook it into [`check`] and [`install`].
+//! System packages come from whichever [`SystemKind`] this machine uses,
+//! picked by [`SystemKind::detect`]. To support another distribution, add a
+//! module here, a [`SystemKind`] variant, and hook it into [`check`] and
+//! [`install`].
 
 pub mod flatpak;
 pub mod packagekit;
+pub mod pacman;
+pub mod rpm_ostree;
 
 use std::{hash::Hash, time::Duration};
 
@@ -19,9 +22,75 @@ use zbus::Connection;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Source {
-    /// Distribution packages, through PackageKit.
+    /// Distribution packages or the OS image, see [`SystemKind`].
     System,
     Flatpak,
+}
+
+/// How this machine's own packages are updated.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum SystemKind {
+    /// PackageKit: Fedora, Pop!_OS, Ubuntu, Debian, openSUSE and others.
+    PackageKit,
+    /// Image-based ostree systems such as Fedora COSMIC Atomic.
+    RpmOstree,
+    /// Arch and derivatives.
+    Pacman,
+    /// NixOS, where updates come from rebuilding the system configuration.
+    NixOs,
+    /// Nothing supported was found.
+    #[default]
+    Unsupported,
+}
+
+impl SystemKind {
+    /// Environment variable that overrides detection, for testing.
+    const OVERRIDE: &str = "COSMIC_APPLET_UPDATES_SYSTEM";
+
+    /// Picks the update method from what is installed. Cheap enough to call
+    /// on every check.
+    pub fn detect() -> Self {
+        match std::env::var(Self::OVERRIDE).as_deref() {
+            Ok("packagekit") => return Self::PackageKit,
+            Ok("rpm-ostree") => return Self::RpmOstree,
+            Ok("pacman") => return Self::Pacman,
+            Ok("nixos") => return Self::NixOs,
+            _ => (),
+        }
+
+        // Atomic systems may also ship PackageKit, which cannot update them.
+        if rpm_ostree::detected() {
+            Self::RpmOstree
+        } else if std::path::Path::new("/etc/NIXOS").exists() {
+            Self::NixOs
+        } else if pacman::detected() {
+            Self::Pacman
+        } else {
+            Self::PackageKit
+        }
+    }
+
+    /// Updates can be applied to the running system.
+    pub fn can_install_now(self) -> bool {
+        matches!(self, Self::PackageKit | Self::Pacman)
+    }
+
+    /// Updates can be staged to install on the next boot.
+    pub fn can_stage(self) -> bool {
+        matches!(self, Self::PackageKit | Self::RpmOstree)
+    }
+}
+
+/// Whether `program` is an executable somewhere in `PATH`.
+pub fn in_path(program: &str) -> bool {
+    std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path).any(|dir| {
+            std::fs::metadata(dir.join(program)).is_ok_and(|m| {
+                m.is_file()
+                    && std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o111 != 0
+            })
+        })
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +117,7 @@ pub struct Update {
 /// system, so the applet can hide it instead of showing an empty list.
 #[derive(Debug, Clone, Default)]
 pub struct Updates {
+    pub system_kind: SystemKind,
     pub system: Option<Vec<Update>>,
     pub flatpak: Option<Vec<Update>>,
     /// System updates are downloaded and will install on the next boot.
@@ -75,24 +145,26 @@ impl Updates {
 
 /// Checks every available source for updates.
 pub async fn check(refresh: bool, include_flatpak: bool) -> Updates {
-    let mut updates = Updates::default();
+    let mut updates = Updates {
+        system_kind: SystemKind::detect(),
+        ..Default::default()
+    };
 
-    match Connection::system().await {
-        Ok(conn) if packagekit::available(&conn).await => {
-            match packagekit::get_updates(&conn, refresh).await {
-                Ok(list) => updates.system = Some(list),
-                Err(why) => {
-                    tracing::error!("failed to get system updates: {why}");
-                    updates.system = Some(Vec::new());
-                    updates.errors.push(why);
-                }
-            }
-            updates.offline_prepared = packagekit::offline_prepared(&conn).await;
-        }
-        Ok(_) => tracing::warn!("PackageKit is not available, system updates are disabled"),
+    let result = match updates.system_kind {
+        SystemKind::PackageKit => check_packagekit(refresh, &mut updates).await,
+        SystemKind::RpmOstree => rpm_ostree::check().await.map(|status| {
+            updates.offline_prepared = status.staged;
+            Some(status.update.into_iter().collect())
+        }),
+        SystemKind::Pacman => pacman::get_updates(refresh).await.map(Some),
+        SystemKind::NixOs | SystemKind::Unsupported => Ok(None),
+    };
+    match result {
+        Ok(list) => updates.system = list,
         Err(why) => {
-            tracing::error!("failed to connect to the system bus: {why}");
-            updates.errors.push(why.to_string());
+            tracing::error!("failed to get system updates: {why}");
+            updates.system = Some(Vec::new());
+            updates.errors.push(why);
         }
     }
 
@@ -110,11 +182,33 @@ pub async fn check(refresh: bool, include_flatpak: bool) -> Updates {
     updates
 }
 
+/// Fills in PackageKit's updates, or marks the system unsupported when
+/// PackageKit is not installed.
+async fn check_packagekit(
+    refresh: bool,
+    updates: &mut Updates,
+) -> Result<Option<Vec<Update>>, String> {
+    let conn = Connection::system().await.map_err(|e| {
+        tracing::error!("failed to connect to the system bus: {e}");
+        e.to_string()
+    })?;
+
+    if !packagekit::available(&conn).await {
+        tracing::warn!("PackageKit is not available, system updates are disabled");
+        updates.system_kind = SystemKind::Unsupported;
+        return Ok(None);
+    }
+
+    updates.offline_prepared = packagekit::offline_prepared(&conn).await;
+    packagekit::get_updates(&conn, refresh).await.map(Some)
+}
+
 /// What to install. `nonce` makes every request a new subscription, so the
 /// same set of updates can be installed again after a failure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct InstallJob {
     pub nonce: u64,
+    pub system_kind: SystemKind,
     pub system_ids: Vec<String>,
     pub flatpak: bool,
     /// Stage system updates for the next boot instead of installing them now.
@@ -172,15 +266,22 @@ async fn run_install(
             })
             .await;
 
-        let conn = Connection::system().await.map_err(|e| e.to_string())?;
-        let mut progress = output.clone();
-        packagekit::update(&conn, &job.system_ids, job.offline, |percentage| {
-            let _ = progress.try_send(InstallEvent::Progress {
-                stage: Stage::System,
-                percentage,
-            });
-        })
-        .await?;
+        match job.system_kind {
+            SystemKind::PackageKit => {
+                let conn = Connection::system().await.map_err(|e| e.to_string())?;
+                let mut progress = output.clone();
+                packagekit::update(&conn, &job.system_ids, job.offline, |percentage| {
+                    let _ = progress.try_send(InstallEvent::Progress {
+                        stage: Stage::System,
+                        percentage,
+                    });
+                })
+                .await?;
+            }
+            SystemKind::RpmOstree => rpm_ostree::upgrade().await?,
+            SystemKind::Pacman => pacman::update_in_terminal().await?,
+            SystemKind::NixOs | SystemKind::Unsupported => (),
+        }
     }
 
     if job.flatpak {
