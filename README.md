@@ -58,6 +58,24 @@ Then add **Updates** to a panel in *Settings → Desktop → Panel → Configure
 
 To remove: `sudo just uninstall`.
 
+### Distro packages
+
+Packaging files live in `packaging/`; each needs a tagged release (`v0.1.0`, …).
+
+- **Pop!_OS, Ubuntu, Debian:** each release has a `.deb`:
+  `sudo apt install ./cosmic-applet-updates_*_amd64.deb`. Build one yourself with
+  `cargo install cargo-deb` and `just deb`.
+- **Fedora (including COSMIC Atomic):** `packaging/fedora/cosmic-applet-updates.spec`.
+  For [COPR](https://copr.fedorainfracloud.org/), add a package with source type
+  *SCM*, this repo's URL, build method *make srpm*, and spec
+  `packaging/fedora/cosmic-applet-updates.spec`; COPR then runs `.copr/Makefile`,
+  which vendors the Rust crates so the RPM builds offline. Users then run
+  `sudo dnf copr enable <you>/cosmic-applet-updates && sudo dnf install cosmic-applet-updates`
+  (on Atomic, add the COPR repo file and use `rpm-ostree install`).
+- **Arch and derivatives:** `packaging/arch/PKGBUILD` (`makepkg -si` from that folder).
+  To publish it on the AUR, run `updpkgsums` and `makepkg --printsrcinfo > .SRCINFO`
+  after tagging.
+
 ### From a release
 
 Each [release](https://github.com/zoenetic/update-applet/releases) has a prebuilt

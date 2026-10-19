@@ -1,0 +1,43 @@
+# Maintainer: zoenetic
+
+pkgname=cosmic-applet-updates
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='COSMIC panel applet for system and Flatpak updates'
+arch=('x86_64' 'aarch64')
+url='https://github.com/zoenetic/update-applet'
+license=('GPL-3.0-only')
+depends=('libxkbcommon' 'wayland' 'pacman-contrib' 'gcc-libs' 'glibc')
+makedepends=('cargo' 'just')
+optdepends=(
+    'flatpak: Flatpak app updates'
+    'cosmic-terminal: terminal used to run pacman'
+)
+source=("update-applet-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+# Update with `updpkgsums` once the v$pkgver tag exists
+sha256sums=('SKIP')
+
+prepare() {
+    cd "update-applet-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "update-applet-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    just build-release --frozen
+}
+
+check() {
+    cd "update-applet-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo test --frozen --release
+}
+
+package() {
+    cd "update-applet-$pkgver"
+    just rootdir="$pkgdir" prefix=/usr install
+    install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

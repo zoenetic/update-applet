@@ -1,5 +1,6 @@
 name := 'cosmic-applet-updates'
 appid := 'io.github.zoenetic.CosmicAppletUpdates'
+version := `sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1`
 
 rootdir := ''
 prefix := '/usr'
@@ -66,6 +67,14 @@ vendor:
     echo 'directory = "vendor"' >> .cargo/config.toml
     tar pcf vendor.tar vendor
     rm -rf vendor
+
+# Writes vendor/ and its cargo config into a tarball, for offline distro builds
+vendor-tarball out=(name + '-' + version + '-vendor.tar.xz'):
+    packaging/vendor-tarball.sh {{ out }}
+
+# Builds a .deb into target/debian (needs `cargo install cargo-deb`)
+deb: build-release
+    cargo deb --no-build
 
 # Refuses a missing binary, or one built in a Nix shell (it loads libraries
 # from the Nix store, so the panel can't start it)
