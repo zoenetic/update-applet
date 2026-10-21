@@ -14,6 +14,9 @@ i18n-embed = { version = "0.16.0", features = [
     "desktop-requester",
 ] }
 i18n-embed-fl = "0.10"
+# Plain git URL, with the commit pinned in Cargo.lock, as the COSMIC applets
+# do: a rev= pin here would count as a different source from the one
+# libcosmic's own git dependencies use, and duplicate crates.
 libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false, features = [
     "applet",
     "applet-token",
