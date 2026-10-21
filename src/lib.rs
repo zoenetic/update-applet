@@ -27,7 +27,7 @@ use cosmic::{
     widget::{divider, icon, indeterminate_linear, scrollable, text},
 };
 
-use backend::{InstallEvent, InstallJob, Kind, Source, Stage, Update, Updates};
+use backend::{InstallEvent, InstallJob, Kind, Source, Stage, SystemKind, Update, Updates};
 use config::UpdatesAppletConfig;
 
 const APP_ID: &str = "io.github.zoenetic.CosmicAppletUpdates";
@@ -201,8 +201,12 @@ impl cosmic::Application for UpdatesApplet {
                 if self.phase != Phase::Idle {
                     return Task::none();
                 }
+                let system_kind = self.updates.system_kind;
+                // Image updates can only ever be staged for the next boot.
+                let offline = offline || !system_kind.can_install_now();
                 let job = InstallJob {
                     nonce: self.next_nonce,
+                    system_kind,
                     system_ids: self.updates.system().iter().map(|u| u.id.clone()).collect(),
                     flatpak: !self.updates.flatpak().is_empty(),
                     offline,
@@ -340,20 +344,30 @@ impl cosmic::Application for UpdatesApplet {
             .padding([8, 0]);
 
         // Update lists
+        let kind = self.updates.system_kind;
         let mut has_section = false;
         if let Some(system) = &self.updates.system {
             content = content.push(separator());
             content = content.push(section(
-                fl!("system-packages"),
+                if kind == SystemKind::RpmOstree {
+                    fl!("system-image")
+                } else {
+                    fl!("system-packages")
+                },
                 Source::System,
                 system,
                 self.show_system,
             ));
             has_section = true;
         } else {
-            content = content.push(separator()).push(padded_control(
-                text::caption(fl!("no-packagekit")).width(Length::Fill),
-            ));
+            let message = if kind == SystemKind::NixOs {
+                fl!("system-nixos")
+            } else {
+                fl!("no-packagekit")
+            };
+            content = content
+                .push(separator())
+                .push(padded_control(text::caption(message).width(Length::Fill)));
         }
         if self.config.include_flatpak
             && let Some(flatpak) = &self.updates.flatpak
@@ -378,12 +392,27 @@ impl cosmic::Application for UpdatesApplet {
                 ))
                 .push(menu_button(text::body(fl!("restart-now"))).on_press(Message::Restart));
         }
+        let has_system = !self.updates.system().is_empty();
         if self.updates.count() > 0 {
             content = content.push(
                 menu_button(text::body(fl!("install-now")))
                     .on_press_maybe((!busy).then_some(Message::Install { offline: false })),
             );
-            if !self.updates.system().is_empty() && !self.updates.offline_prepared {
+            // Say up front where system updates will happen when it is not
+            // "right here, right now".
+            let note = match kind {
+                SystemKind::RpmOstree if has_system => Some(fl!("image-applies-on-restart")),
+                SystemKind::Pacman if has_system => Some(fl!("pacman-opens-terminal")),
+                _ => None,
+            };
+            if let Some(note) = note {
+                content = content.push(padded_control(text::caption(note).width(Length::Fill)));
+            }
+            if has_system
+                && kind.can_install_now()
+                && kind.can_stage()
+                && !self.updates.offline_prepared
+            {
                 content = content.push(
                     menu_button(text::body(fl!("install-on-restart")))
                         .on_press_maybe((!busy).then_some(Message::Install { offline: true })),
@@ -526,6 +555,9 @@ impl UpdatesApplet {
                 offline,
             } => {
                 let label = match (stage, offline) {
+                    (Stage::System, _) if self.updates.system_kind == SystemKind::Pacman => {
+                        fl!("updating-in-terminal")
+                    }
                     (Stage::System, true) => fl!("downloading-system"),
                     (Stage::System, false) => fl!("installing-system"),
                     (Stage::Flatpak, _) => fl!("installing-flatpak"),

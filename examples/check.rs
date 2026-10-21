@@ -15,6 +15,7 @@ async fn main() {
 
     let updates = cosmic_applet_updates::backend::check(refresh, flatpak).await;
 
+    println!("System type: {:?}", updates.system_kind);
     for (title, list) in [("System", &updates.system), ("Flatpak", &updates.flatpak)] {
         match list {
             Some(list) => {

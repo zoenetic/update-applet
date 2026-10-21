@@ -20,7 +20,12 @@ last-checked-hours = Last checked { $hours ->
 }
 system-packages = System packages
 flatpak-apps = Flatpak apps
-no-packagekit = PackageKit is not installed, system updates are unavailable
+no-packagekit = No supported package manager found, so system updates are unavailable. Installing PackageKit usually fixes this.
+system-nixos = System updates are managed by your NixOS configuration
+system-image = System image
+image-applies-on-restart = The system update installs on the next restart
+pacman-opens-terminal = System packages update in a terminal, so you can answer pacman's prompts
+updating-in-terminal = Updating system packages in the terminal…
 check-now = Check for updates
 install-now = Install all updates
 install-on-restart = Install on next restart

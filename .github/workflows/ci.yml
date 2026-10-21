@@ -41,9 +41,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: taiki-e/install-action@v2
         with:
-          tool: just
+          tool: just,cargo-deb
       - uses: Swatinem/rust-cache@v2
       - run: just build-release --locked
+      - name: Build .deb
+        run: cargo deb --no-build
+      - name: Vendor tarball (Rust sources for offline distro builds)
+        run: just vendor-tarball "cosmic-applet-updates-${GITHUB_REF_NAME#v}-vendor.tar.xz"
       - name: Package
         run: |
           dir=cosmic-applet-updates-${GITHUB_REF_NAME}-x86_64
@@ -57,4 +61,6 @@ jobs:
           files: |
             cosmic-applet-updates-*.tar.gz
             cosmic-applet-updates-*.tar.gz.sha256
+            cosmic-applet-updates-*-vendor.tar.xz
+            target/debian/*.deb
           generate_release_notes: true
