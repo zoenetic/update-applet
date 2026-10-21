@@ -18,7 +18,7 @@ jobs:
   check:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
@@ -39,7 +39,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y libxkbcommon-dev libwayland-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
@@ -60,7 +60,7 @@ jobs:
           cp -r data justfile LICENSE README.md "$dir/"
           tar czf "$dir.tar.gz" "$dir"
           sha256sum "$dir.tar.gz" > "$dir.tar.gz.sha256"
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: |
             cosmic-applet-updates-*.tar.gz
