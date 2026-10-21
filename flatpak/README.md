@@ -11,10 +11,8 @@ One-time setup:
 ```sh
 sudo dnf install flatpak-builder python3-aiohttp python3-tomlkit   # or your distro's equivalent
 flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak remote-add --user --if-not-exists cosmic https://apt.pop-os.org/cosmic/cosmic.flatpakrepo
 flatpak install --user flathub org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 \
-    org.freedesktop.Sdk.Extension.rust-stable//25.08
-flatpak install --user cosmic com.system76.Cosmic.BaseApp//stable
+    org.freedesktop.Sdk.Extension.rust-stable//25.08 com.system76.Cosmic.BaseApp//stable
 ```
 
 Then from the repository root:
