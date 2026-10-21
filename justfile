@@ -34,6 +34,10 @@ check *args:
     cargo clippy --all-targets {{ args }} -- -D warnings
     cargo test {{ args }}
 
+# Checks dependencies for known vulnerabilities (needs `cargo install cargo-audit`)
+audit:
+    cargo audit
+
 # Prints what the applet would show, without starting it
 list-updates *args:
     cargo run --example check -- {{ args }}

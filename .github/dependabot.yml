@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    # One PR a week for compatible bumps; major versions still come one by one.
+    groups:
+      cargo:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # Git dependency pinned in Cargo.lock on purpose (see the libcosmic
+      # comment in Cargo.toml); update it by hand with `cargo update -p libcosmic`.
+      - dependency-name: libcosmic
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

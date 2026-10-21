@@ -89,6 +89,7 @@ sudo just install
 
 ```sh
 just check           # clippy + tests
+just audit           # check dependencies for known vulnerabilities
 just list-updates    # print what the applet sees (add --refresh to refresh metadata)
 just run             # run outside the panel
 just settings        # open the settings window
