@@ -1,5 +1,7 @@
 name := 'cosmic-applet-updates'
 appid := 'io.github.zoenetic.CosmicAppletUpdates'
+# flatpak-builder-tools commit providing flatpak-cargo-generator.py
+flatpak_tools_rev := '74697c75b630d7330e77250fc13cb5ea688d9479'
 version := `sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1`
 
 rootdir := ''
@@ -55,6 +57,7 @@ install: check-installable
     install -Dm0755 {{ targetdir }}/{{ target }}/{{ name }} {{ bindir }}/{{ name }}
     install -Dm0644 data/{{ appid }}.desktop {{ sharedir }}/applications/{{ appid }}.desktop
     install -Dm0644 data/{{ appid }}.Settings.desktop {{ sharedir }}/applications/{{ appid }}.Settings.desktop
+    install -Dm0644 data/{{ appid }}.metainfo.xml {{ sharedir }}/metainfo/{{ appid }}.metainfo.xml
     find data/icons -type f -printf '%P\n' | xargs -I {} install -Dm0644 data/icons/{} {{ iconsdir }}/{}
 
 # Removes installed files
@@ -62,6 +65,7 @@ uninstall:
     rm -f {{ bindir }}/{{ name }}
     rm -f {{ sharedir }}/applications/{{ appid }}.desktop
     rm -f {{ sharedir }}/applications/{{ appid }}.Settings.desktop
+    rm -f {{ sharedir }}/metainfo/{{ appid }}.metainfo.xml
     find data/icons -type f -printf '%P\n' | xargs -I {} rm -f {{ iconsdir }}/{}
 
 # Vendor Cargo dependencies locally
@@ -79,6 +83,21 @@ vendor-tarball out=(name + '-' + version + '-vendor.tar.xz'):
 # Builds a .deb into target/debian (needs `cargo install cargo-deb`)
 deb: build-release
     cargo deb --no-build
+
+# Writes flatpak/cargo-sources.json for the offline Flatpak build (needs python3-aiohttp, python3-tomlkit)
+flatpak-sources:
+    mkdir -p target/flatpak
+    curl -fsSL -o target/flatpak/flatpak-cargo-generator.py \
+        https://raw.githubusercontent.com/flatpak/flatpak-builder-tools/{{ flatpak_tools_rev }}/cargo/flatpak-cargo-generator.py
+    python3 target/flatpak/flatpak-cargo-generator.py Cargo.lock -o flatpak/cargo-sources.json
+
+# Builds target/flatpak/<appid>.flatpak (setup steps in flatpak/README.md)
+flatpak *args: flatpak-sources
+    flatpak-builder --user --force-clean --repo=target/flatpak/repo {{ args }} \
+        target/flatpak/build flatpak/{{ appid }}.json
+    flatpak build-bundle \
+        --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+        target/flatpak/repo target/flatpak/{{ appid }}.flatpak {{ appid }}
 
 # Refuses a missing binary, or one built in a Nix shell (it loads libraries
 # from the Nix store, so the panel can't start it)

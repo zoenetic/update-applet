@@ -5,13 +5,12 @@
 
 use std::process::Stdio;
 
-use tokio::process::Command;
-
 use super::{Kind, Update};
+use crate::host;
 
 /// Whether the `flatpak` command is installed.
 pub async fn available() -> bool {
-    Command::new("flatpak")
+    host::command("flatpak")
         .arg("--version")
         .stdout(Stdio::null())
         .stderr(Stdio::null())
@@ -22,7 +21,7 @@ pub async fn available() -> bool {
 
 /// Lists Flatpak apps and runtimes with updates, across system and user installs.
 pub async fn get_updates() -> Result<Vec<Update>, String> {
-    let output = Command::new("flatpak")
+    let output = host::command("flatpak")
         .args([
             "remote-ls",
             "--updates",
@@ -45,7 +44,7 @@ pub async fn get_updates() -> Result<Vec<Update>, String> {
 
 /// Updates every installed Flatpak.
 pub async fn update() -> Result<(), String> {
-    let output = Command::new("flatpak")
+    let output = host::command("flatpak")
         .args(["update", "--noninteractive", "-y"])
         .stdin(Stdio::null())
         .output()
