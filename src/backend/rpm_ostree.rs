@@ -11,9 +11,9 @@
 use std::process::Stdio;
 
 use serde::Deserialize;
-use tokio::process::Command;
 
 use super::{Kind, Update};
+use crate::host;
 
 /// `rpm-ostree upgrade --check` exits with this code when nothing is available.
 const EXIT_NO_UPDATE: i32 = 77;
@@ -40,14 +40,14 @@ struct Deployment {
 }
 
 /// Whether this system boots an ostree deployment managed by rpm-ostree.
-pub fn detected() -> bool {
-    std::path::Path::new("/run/ostree-booted").exists() && super::in_path("rpm-ostree")
+pub async fn detected() -> bool {
+    host::exists("/run/ostree-booted").await && host::in_path("rpm-ostree").await
 }
 
 pub async fn check() -> Result<Status, String> {
     let staged_commit = staged_commit().await?;
 
-    let output = Command::new("rpm-ostree")
+    let output = host::command("rpm-ostree")
         .args(["upgrade", "--check"])
         .stdin(Stdio::null())
         .output()
@@ -71,7 +71,7 @@ pub async fn check() -> Result<Status, String> {
 
 /// Downloads the latest image and stages it for the next boot.
 pub async fn upgrade() -> Result<(), String> {
-    let output = Command::new("rpm-ostree")
+    let output = host::command("rpm-ostree")
         .arg("upgrade")
         .stdin(Stdio::null())
         .output()
@@ -86,7 +86,7 @@ pub async fn upgrade() -> Result<(), String> {
 }
 
 async fn staged_commit() -> Result<Option<String>, String> {
-    let output = Command::new("rpm-ostree")
+    let output = host::command("rpm-ostree")
         .args(["status", "--json"])
         .stdin(Stdio::null())
         .output()
@@ -145,8 +145,7 @@ fn parse_check(stdout: &str, os_name: String) -> Option<Update> {
 
 /// The OS name to show for the image, from `/etc/os-release`.
 fn os_name() -> String {
-    std::fs::read_to_string("/etc/os-release")
-        .ok()
+    host::os_release()
         .and_then(|release| {
             release.lines().find_map(|line| {
                 line.strip_prefix("NAME=")

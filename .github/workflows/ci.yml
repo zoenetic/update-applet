@@ -31,9 +31,37 @@ jobs:
       - run: cargo fmt --check
       - run: just check
 
+  flatpak:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install flatpak-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder python3-aiohttp python3-tomlkit
+          # Ubuntu 24.04 blocks the unprivileged user namespaces bubblewrap needs
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - name: Install runtimes
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak remote-add --user --if-not-exists cosmic https://apt.pop-os.org/cosmic/cosmic.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.freedesktop.Platform//25.08 org.freedesktop.Sdk//25.08 \
+            org.freedesktop.Sdk.Extension.rust-stable//25.08
+          flatpak install --user -y --noninteractive cosmic com.system76.Cosmic.BaseApp//stable
+      - run: just flatpak
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: target/flatpak/io.github.zoenetic.CosmicAppletUpdates.flatpak
+          if-no-files-found: error
+
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: check
+    needs: [check, flatpak]
     # Built on an older glibc than current distros so the binary runs on them too
     runs-on: ubuntu-24.04
     permissions:
@@ -60,9 +88,16 @@ jobs:
           cp -r data justfile LICENSE README.md "$dir/"
           tar czf "$dir.tar.gz" "$dir"
           sha256sum "$dir.tar.gz" > "$dir.tar.gz.sha256"
+      - uses: actions/download-artifact@v4
+        with:
+          name: flatpak
+          path: flatpak-bundle
+      - name: Name the Flatpak bundle
+        run: mv flatpak-bundle/*.flatpak "cosmic-applet-updates-${GITHUB_REF_NAME}-x86_64.flatpak"
       - uses: softprops/action-gh-release@v3
         with:
           files: |
+            cosmic-applet-updates-*.flatpak
             cosmic-applet-updates-*.tar.gz
             cosmic-applet-updates-*.tar.gz.sha256
             cosmic-applet-updates-*-vendor.tar.xz

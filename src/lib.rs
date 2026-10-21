@@ -3,6 +3,7 @@
 
 pub mod backend;
 mod config;
+pub mod host;
 mod localize;
 mod settings;
 
@@ -169,15 +170,19 @@ impl cosmic::Application for UpdatesApplet {
                     self.token_tx = None;
                 }
                 TokenUpdate::ActivationToken { token, exec } => {
-                    let mut cmd = if exec == SETTINGS_EXEC {
-                        settings::command()
+                    let token_env = token
+                        .as_deref()
+                        .map(|t| [("XDG_ACTIVATION_TOKEN", t), ("DESKTOP_STARTUP_ID", t)]);
+                    let token_env = token_env.as_ref().map_or(&[][..], |env| &env[..]);
+                    // Our own settings window runs in the same sandbox as the
+                    // applet; anything else is a host app.
+                    let cmd = if exec == SETTINGS_EXEC {
+                        let mut cmd = settings::command();
+                        cmd.envs(token_env.iter().copied());
+                        cmd
                     } else {
-                        std::process::Command::new(exec)
+                        host::std_command(&exec, token_env)
                     };
-                    if let Some(token) = token {
-                        cmd.env("XDG_ACTIVATION_TOKEN", &token);
-                        cmd.env("DESKTOP_STARTUP_ID", &token);
-                    }
                     tokio::spawn(cosmic::process::spawn(cmd));
                 }
             },
@@ -255,10 +260,7 @@ impl cosmic::Application for UpdatesApplet {
             },
             Message::Restart => {
                 // cosmic-osd asks for confirmation before restarting.
-                if let Err(why) = std::process::Command::new("cosmic-osd")
-                    .arg("restart")
-                    .spawn()
-                {
+                if let Err(why) = host::std_command("cosmic-osd", &[]).arg("restart").spawn() {
                     tracing::error!("failed to spawn cosmic-osd: {why}");
                 }
             }

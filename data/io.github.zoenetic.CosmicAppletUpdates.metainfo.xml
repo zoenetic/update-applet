@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.zoenetic.CosmicAppletUpdates</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <project_group>COSMIC</project_group>
+  <name>Updates</name>
+  <summary>See and install system and Flatpak updates from the COSMIC panel</summary>
+  <developer id="io.github.zoenetic">
+    <name>zoenetic</name>
+  </developer>
+  <description>
+    <p>A COSMIC panel applet that tells you when system and app updates are available, and installs them without opening a terminal or the app store.</p>
+    <ul>
+      <li>System updates through PackageKit, rpm-ostree on Fedora Atomic, or pacman on Arch</li>
+      <li>Flatpak app and runtime updates</li>
+      <li>Install now, or stage system updates for the next restart</li>
+      <li>Checks automatically on a schedule you choose</li>
+    </ul>
+  </description>
+  <icon type="stock">io.github.zoenetic.CosmicAppletUpdates-symbolic</icon>
+  <launchable type="desktop-id">io.github.zoenetic.CosmicAppletUpdates.desktop</launchable>
+  <url type="homepage">https://github.com/zoenetic/update-applet</url>
+  <url type="bugtracker">https://github.com/zoenetic/update-applet/issues</url>
+  <content_rating type="oars-1.1"/>
+  <provides>
+    <id>com.system76.CosmicApplet</id>
+    <binary>cosmic-applet-updates</binary>
+  </provides>
+  <categories>
+    <category>System</category>
+  </categories>
+  <releases>
+    <release version="0.1.0" date="2026-10-21"/>
+  </releases>
+</component>

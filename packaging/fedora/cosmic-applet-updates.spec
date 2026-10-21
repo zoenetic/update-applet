@@ -46,6 +46,7 @@ just rootdir=%{buildroot} prefix=%{_prefix} install
 %{_bindir}/%{name}
 %{_datadir}/applications/io.github.zoenetic.CosmicAppletUpdates.desktop
 %{_datadir}/applications/io.github.zoenetic.CosmicAppletUpdates.Settings.desktop
+%{_metainfodir}/io.github.zoenetic.CosmicAppletUpdates.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/io.github.zoenetic.CosmicAppletUpdates-symbolic.svg
 
 %changelog

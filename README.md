@@ -72,6 +72,11 @@ Packaging files live in `packaging/`; each needs a tagged release (`v0.1.0`, …
   which vendors the Rust crates so the RPM builds offline. Users then run
   `sudo dnf copr enable <you>/cosmic-applet-updates && sudo dnf install cosmic-applet-updates`
   (on Atomic, add the COPR repo file and use `rpm-ostree install`).
+- **Flatpak:** each release has a `.flatpak` bundle built by CI:
+  `flatpak install --user cosmic-applet-updates-*.flatpak` (needs the Flathub remote for
+  its runtime). Build one yourself with `just flatpak`; setup is in
+  [`flatpak/README.md`](flatpak/README.md). It is not on Flathub or the COSMIC Flatpak
+  repository yet.
 - **Arch and derivatives:** `packaging/arch/PKGBUILD` (`makepkg -si` from that folder).
   To publish it on the AUR, run `updpkgsums` and `makepkg --printsrcinfo > .SRCINFO`
   after tagging.

@@ -10,9 +10,8 @@
 
 use std::process::Stdio;
 
-use tokio::process::Command;
-
 use super::{Kind, Update};
+use crate::host;
 
 /// `checkupdates` exits with this code when nothing is available.
 const EXIT_NO_UPDATES: i32 = 2;
@@ -26,17 +25,17 @@ const TERMINALS: &[(&str, &[&str])] = &[
 
 const UPGRADE_SCRIPT: &str = "sudo pacman -Syu; echo; printf 'Press Enter to close. '; read -r _";
 
-pub fn detected() -> bool {
-    super::in_path("pacman")
+pub async fn detected() -> bool {
+    host::in_path("pacman").await
 }
 
 /// Lists available updates. Without `refresh` the last synced databases are used.
 pub async fn get_updates(refresh: bool) -> Result<Vec<Update>, String> {
-    if !super::in_path("checkupdates") {
+    if !host::in_path("checkupdates").await {
         return Err("checkupdates not found: install pacman-contrib to see updates".into());
     }
 
-    let mut cmd = Command::new("checkupdates");
+    let mut cmd = host::command("checkupdates");
     if !refresh {
         cmd.arg("--nosync");
     }
@@ -56,10 +55,10 @@ pub async fn get_updates(refresh: bool) -> Result<Vec<Update>, String> {
 /// Opens a terminal running `sudo pacman -Syu` and waits until it is closed.
 pub async fn update_in_terminal() -> Result<(), String> {
     for (terminal, args) in TERMINALS {
-        if !super::in_path(terminal) {
+        if !host::in_path(terminal).await {
             continue;
         }
-        return Command::new(terminal)
+        return host::command(terminal)
             .args(*args)
             .args(["sh", "-c", UPGRADE_SCRIPT])
             .stdin(Stdio::null())

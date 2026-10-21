@@ -20,6 +20,8 @@ use cosmic::iced::{Subscription, stream};
 use futures::{SinkExt, StreamExt, channel::mpsc};
 use zbus::Connection;
 
+use crate::host;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Source {
     /// Distribution packages or the OS image, see [`SystemKind`].
@@ -47,9 +49,9 @@ impl SystemKind {
     /// Environment variable that overrides detection, for testing.
     const OVERRIDE: &str = "COSMIC_APPLET_UPDATES_SYSTEM";
 
-    /// Picks the update method from what is installed. Cheap enough to call
-    /// on every check.
-    pub fn detect() -> Self {
+    /// Picks the update method from what is installed on the host. Cheap
+    /// enough to call on every check.
+    pub async fn detect() -> Self {
         match std::env::var(Self::OVERRIDE).as_deref() {
             Ok("packagekit") => return Self::PackageKit,
             Ok("rpm-ostree") => return Self::RpmOstree,
@@ -59,11 +61,11 @@ impl SystemKind {
         }
 
         // Atomic systems may also ship PackageKit, which cannot update them.
-        if rpm_ostree::detected() {
+        if rpm_ostree::detected().await {
             Self::RpmOstree
-        } else if std::path::Path::new("/etc/NIXOS").exists() {
+        } else if host::exists("/etc/NIXOS").await {
             Self::NixOs
-        } else if pacman::detected() {
+        } else if pacman::detected().await {
             Self::Pacman
         } else {
             Self::PackageKit
@@ -79,18 +81,6 @@ impl SystemKind {
     pub fn can_stage(self) -> bool {
         matches!(self, Self::PackageKit | Self::RpmOstree)
     }
-}
-
-/// Whether `program` is an executable somewhere in `PATH`.
-pub fn in_path(program: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|path| {
-        std::env::split_paths(&path).any(|dir| {
-            std::fs::metadata(dir.join(program)).is_ok_and(|m| {
-                m.is_file()
-                    && std::os::unix::fs::PermissionsExt::mode(&m.permissions()) & 0o111 != 0
-            })
-        })
-    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -146,7 +136,7 @@ impl Updates {
 /// Checks every available source for updates.
 pub async fn check(refresh: bool, include_flatpak: bool) -> Updates {
     let mut updates = Updates {
-        system_kind: SystemKind::detect(),
+        system_kind: SystemKind::detect().await,
         ..Default::default()
     };
 
